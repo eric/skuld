@@ -64,18 +64,18 @@
   "Wipe and shutdown a seq of nodes."
   [nodes]
   (->> nodes
-    (pmap (fn wipe-and-shutdown [node]
-            (wipe-local! node nil)
-            (shutdown! node)))
-    dorun))
+       (pmap (fn wipe-and-shutdown [node]
+               (wipe-local! node nil)
+               (shutdown! node)))
+       dorun))
 
 (defn wipe-nodes!
   "Wipe a seq of nodes."
   [nodes]
-  (dorun
-    (pmap (fn wipe [node]
-            (wipe-local! node nil))
-          nodes)))
+  (->> nodes
+       (pmap (fn wipe [node]
+               (wipe-local! node nil)))
+       dorun))
 
 
 (defn partition-available?
@@ -104,8 +104,7 @@
 ;                                       vnode/state))
 ;                    unelected)))
         (doseq [vnodes unelected]
-          (with-redefs [vnode/election-timeout 0]
-            (vnode/elect! (rand-nth vnodes))))
+          (vnode/elect! (rand-nth vnodes)))
         (Thread/sleep 100)
         (recur (remove partition-available? unelected)))))
 
