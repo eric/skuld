@@ -32,7 +32,8 @@
                              ChannelInitializer
                              ChannelOption
                              ChannelStateHandlerAdapter
-                             DefaultEventExecutorGroup)
+                             DefaultEventExecutorGroup ChannelPipeline ChannelPropertyAccess ChannelHandler
+                             AbstractChannel)
            (io.netty.channel.socket SocketChannel)
            (io.netty.channel.socket.nio NioEventLoopGroup
                                         NioSocketChannel
@@ -141,12 +142,11 @@
         (.childHandler
           (proxy [ChannelInitializer] []
             (initChannel [^SocketChannel ch]
-              (.. ch
-                  (pipeline)
-                  (addLast "fdecoder" (protobuf-varint32-frame-decoder))
-                  (addLast "fencoder" protobuf-varint32-frame-encoder)
-                  (addLast "codec" (fressian-codec))
-                  (addLast event-executor "handler"
+              (let [^ChannelPipeline pipeline (.pipeline ^AbstractChannel ch)]
+                (.addLast pipeline "fdecoder" ^ChannelHandler (protobuf-varint32-frame-decoder))
+                (.addLast pipeline "fencoder" ^ChannelHandler protobuf-varint32-frame-encoder)
+                (.addLast pipeline "codec" ^ChannelHandler (fressian-codec))
+                (.addLast pipeline event-executor "handler"
                           (handler @(:handler node))))))))
 
       {:listener (.. bootstrap bind sync)
@@ -206,13 +206,12 @@
         (.channel NioSocketChannel)
         (.handler (proxy [ChannelInitializer] []
                     (initChannel [^SocketChannel ch]
-                      (.. ch
-                          (pipeline)
-                          (addLast "fdecoder" (protobuf-varint32-frame-decoder))
-                          (addLast "fencoder" protobuf-varint32-frame-encoder)
-                          (addLast "codec" (fressian-codec))
-                          (addLast "inactive" (inactive-client-handler node))
-                          (addLast event-executor "handler"
+                      (let [^ChannelPipeline pipeline (.pipeline ^AbstractChannel ch)]
+                          (.addLast pipeline "fdecoder" ^ChannelHandler (protobuf-varint32-frame-decoder))
+                          (.addLast pipeline "fencoder" ^ChannelHandler protobuf-varint32-frame-encoder)
+                          (.addLast pipeline "codec" ^ChannelHandler (fressian-codec))
+                          (.addLast pipeline "inactive" ^ChannelHandler (inactive-client-handler node))
+                          (.addLast pipeline event-executor "handler"
                                   (client-response-handler node)))))))
       {:bootstrap bootstrap
        :group group-}

@@ -22,7 +22,7 @@
             clj-helix.admin)
   (:import com.aphyr.skuld.Bytes))
 
-(def b64->id #'skuld.http/b64->id)
+(def b64url->id #'skuld.http/b64url->id)
 
 (defn admin
   [zk]
@@ -258,7 +258,7 @@
     (let [resp (http/get "http://127.0.0.1:13100/tasks/list" {:as :json})
           content-type (get-in resp [:headers "content-type"])
           tasks (-> resp :body :tasks)
-          ids (map (comp b64->id :id) tasks)]
+          ids (map (comp b64url->id :id) tasks)]
       (is (= 200 (:status resp)))
       (is (= "application/json;charset=utf-8" content-type))
       (is (= n (count tasks)))

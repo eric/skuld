@@ -17,7 +17,8 @@
 (defn- encode-bytes
   "Encode a bytes to the json generator."
   [^Bytes b ^JsonGenerator jg]
-  (.writeString jg (-> ^Bytes b .bytes b64/encode String. (.replaceAll "\\+" "-") (.replaceAll "/" "_"))))
+  (let [^bytes encoded (-> ^Bytes b .bytes b64/encode)]
+    (.writeString jg (String. encoded))))
 
 ;; Custom Cheshire encoder for the Bytes type
 (add-encoder Bytes encode-bytes)
@@ -59,10 +60,33 @@
 (def ^:private GET (partial endpoint :get))
 (def ^:private POST (partial endpoint :post))
 
-(defn- b64->id
+(defn- bytes->b64
+  "Coerce a Bytes type into a base-64 encoded string."
+  ^String
+  [^Bytes b]
+  (let [^bytes encoded (-> b .bytes b64/encode)]
+    (String. encoded)))
+
+(defn- b64->bytes
+  "Coerces a base64-encoded string into a Bytes type."
+  [^String b64]
+  (-> b64 .getBytes b64/decode Bytes.))
+
+(defn- b64url->id
   "Coerces a base64-encoded id into a Bytes type."
   [^String b64-id]
-  (-> b64-id (.replaceAll "-" "+") (.replaceAll "_" "/" ) .getBytes b64/decode Bytes.))
+  (-> b64-id (.replaceAll "-" "+") (.replaceAll "_" "/") b64->bytes))
+
+(defn- id->b64url
+  "Coerce an id into a base64-urlsafe-encoded id."
+  [^Bytes b]
+  (-> b bytes->b64 (.replaceAll "\\+" "-") (.replaceAll "/" "_")))
+
+(defn- convert-response-id
+  [response]
+  (if-let [id (:id response)]
+    (assoc response :id (id->b64url id))
+    response))
 
 (defn- parse-int
   "Safely coerces a string into an integer. If the conversion is impossible,
@@ -85,14 +109,15 @@
   [node req]
   (let [dt    (-> req :body :dt)
         queue (-> req :body :queue)
-        ret (node/claim! node {:queue queue
-                               :dt    dt})]
+        ret   (convert-response-id
+                (node/claim! node {:queue queue
+                                   :dt    dt}))]
     (POST req (dissoc ret :request-id))))
 
 (defn- complete!
   "Like `node/complete!`, but wrapped around an HTTP request."
   [node req id]
-  (let [id  (b64->id id)
+  (let [id  (b64url->id id)
         cid (-> req :body :cid)
         w   (-> req :query-params :w parse-int)
         msg {:task-id id :claim-id cid :w w}
@@ -112,7 +137,8 @@
            task (-> req :body :task)]
     (try (let [w   (-> req :body :w)
                msg {:task task :w w}
-               ret (node/enqueue! node msg)]
+               ret (convert-response-id
+                     (node/enqueue! node msg))]
            (POST req (dissoc ret :responses)))
          ;; Handle vnode assertion; return an error to
          ;; the client
@@ -132,8 +158,9 @@
   "Like `node/get-task`, but wrapped around an HTTP request."
   [node req id]
   (let [r   (-> req :query-params :r parse-int)
-        msg {:id (b64->id id) :r r}
-        ret (node/get-task node msg)]
+        msg {:id (b64url->id id) :r r}
+        ret (convert-response-id
+              (node/get-task node msg))]
     (if-not (-> ret :task :id)
       (GET req {:error "No such task"} not-found)
       (GET req (dissoc ret :responses)))))
